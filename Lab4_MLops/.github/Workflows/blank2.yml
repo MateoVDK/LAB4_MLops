@@ -1,0 +1,43 @@
+name: Kubernetes Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Generate random pod name
+        id: podname
+        run: echo "POD_NAME=mypod-$(openssl rand -hex 4)" >> $GITHUB_ENV
+
+      - name: Show generated pod name
+        run: 'echo "Generated pod name: $POD_NAME"'
+
+      - name: Create Kubernetes manifest
+        run: |
+          cat <<EOF > pod.yaml
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: $POD_NAME
+            namespace: default
+            labels:
+              name: mypod
+          spec:
+            containers:
+            - name: mypod
+              image: rancher/hello-world
+          EOF
+
+      - name: Apply manifest to cluster
+        run: kubectl apply -f pod.yaml
+
+      - name: List pods in namespace
+        run: kubectl get pods -o wide
