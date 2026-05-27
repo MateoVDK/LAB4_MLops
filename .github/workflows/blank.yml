@@ -10,34 +10,75 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      # 1. Pull source code
       - name: Check out repository
         uses: actions/checkout@v4
 
+      # 2. Generate random pod name
       - name: Generate random pod name
         id: podname
         run: echo "POD_NAME=mypod-$(openssl rand -hex 4)" >> $GITHUB_ENV
 
       - name: Show generated pod name
-        run: 'echo "Generated pod name: $POD_NAME"'
+        run: echo "Generated pod name: $POD_NAME"
 
-      - name: Create Kubernetes manifest
+      # 3. Create Deployment manifest
+      - name: Create Deployment manifest
         run: |
-          cat <<EOF > pod.yaml
-          apiVersion: v1
-          kind: Pod
+          cat <<EOF > deployment.yaml
+          apiVersion: apps/v1
+          kind: Deployment
           metadata:
-            name: $POD_NAME
+            name: myapp
             namespace: default
-            labels:
-              name: mypod
           spec:
-            containers:
-            - name: mypod
-              image: rancher/hello-world
+            replicas: 1
+            selector:
+              matchLabels:
+                app: myapp
+            template:
+              metadata:
+                labels:
+                  app: myapp
+              spec:
+                containers:
+                - name: myapp
+                  image: rancher/hello-world
           EOF
 
-      - name: Apply manifest to cluster
-        run: kubectl apply -f pod.yaml
+      # 4. Create Service manifest (NodePort)
+      - name: Create Service manifest
+        run: |
+          cat <<EOF > service.yaml
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: myapp-service
+            namespace: default
+          spec:
+            type: NodePort
+            selector:
+              app: myapp
+            ports:
+            - port: 80
+              targetPort: 80
+              nodePort: 30080
+          EOF
 
-      - name: List pods in namespace
-        run: kubectl get pods -o wide
+      # 5. Apply Deployment + Service
+      - name: Apply Deployment
+        run: kubectl apply -f deployment.yaml
+
+      - name: Apply Service
+        run: kubectl apply -f service.yaml
+
+      # 6. Force rollout (required when using same image tag)
+      - name: Restart Deployment (rollout)
+        run: kubectl rollout restart deployment myapp -n default
+
+      # 7. Verify rollout + pods
+      - name: Check rollout status
+        run: kubectl rollout status deployment myapp -n default
+
+      - name: List pods
+        run: kubectl get pods -o wide -n default
