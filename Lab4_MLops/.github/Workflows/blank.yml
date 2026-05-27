@@ -15,7 +15,8 @@ jobs:
         run: docker build -t hello-world-nginx:v1 ./LAB4_MLops
 
       - name: Remove old container if it exists
-        run: docker rm -f test-container || true
+        run: docker rm -f test-container 2>$null; exit 0
+
 
 
       - name: Run Docker container
