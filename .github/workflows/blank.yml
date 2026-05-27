@@ -1,45 +1,43 @@
-name: CI
+name: Kubernetes Test
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ "main" ]
 
 jobs:
-  build:
+  deploy:
     runs-on: self-hosted
 
     steps:
-      - name: Check out code repository
+      - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build local Docker image
-        run: docker build -t hello-world-nginx:v1 ./LAB4_MLops
+      - name: Generate random pod name
+        id: podname
+        run: echo "POD_NAME=mypod-$(openssl rand -hex 4)" >> $GITHUB_ENV
 
-      - name: Remove old container if it exists
-        run: docker rm -f test-container 2>$null; exit 0
+      - name: Show generated pod name
+        run: 'echo "Generated pod name: $POD_NAME"'
 
-
-
-      - name: Run Docker container
-        run: docker run -d -p 8080:80 --name test-container hello-world-nginx:v1
-
-      - name: Show running containers
-        run: docker ps
-
-      - name: Show container logs
-        run: docker logs test-container
-
-      - name: Log in to GitHub Container Registry
-        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-
-      - name: Build image for GitHub Packages
+      - name: Create Kubernetes manifest
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/hello-world-nginx:${{ github.ref_name }} \
-                       -t ghcr.io/${{ github.repository_owner }}/hello-world-nginx:${{ github.sha }} \
-                       ./LAB4_MLops
+          cat <<EOF > pod.yaml
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: $POD_NAME
+            namespace: default
+            labels:
+              name: mypod
+          spec:
+            containers:
+            - name: mypod
+              image: rancher/hello-world
+          EOF
 
-      - name: Push branch tag
-        run: docker push ghcr.io/${{ github.repository_owner }}/hello-world-nginx:${{ github.ref_name }}
+      - name: Apply manifest to cluster
+        run: kubectl apply -f pod.yaml
 
-      - name: Push commit tag
-        run: docker push ghcr.io/${{ github.repository_owner }}/hello-world-nginx:${{ github.sha }}
+      - name: List pods in namespace
+        run: kubectl get pods -o wide
